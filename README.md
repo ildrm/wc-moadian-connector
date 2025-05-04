@@ -153,7 +153,7 @@ For support, please open an issue on the [GitHub repository](https://github.com/
 1. این مخزن را فورک کنید.
 2. یک شاخه جدید برای ویژگی یا رفع اشکال ایجاد کنید (`git checkout -b feature/your-feature`).
 3. تغییرات خود را کامیت کنید (`git commit -m 'Add your feature'`).
-4. شاخه را به مخزن خود推送 کنید (`git push origin feature/your-feature`).
+4. شاخه را به مخزن خود push کنید (`git push origin feature/your-feature`).
 5. یک درخواست کشش (Pull Request) با توضیحات کامل تغییرات باز کنید.
 
 لطفاً مطمئن شوید کد شما از استانداردهای کدنویسی وردپرس پیروی می‌کند و مستندات مناسب دارد.
