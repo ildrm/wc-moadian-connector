@@ -5,42 +5,34 @@ Tags: WooCommerce, Iran Tax, Moadian, Invoicing, سامانه مودیان
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Integrates WooCommerce with the Iranian Tax System (سامانه مودیان) by sending completed orders as fiscal invoices.
+Sends completed WooCommerce orders through the documented Moadian no-certificate self-TSP protocol.
 
 == Description ==
 
-This plugin automatically sends completed WooCommerce orders to the Iranian Tax System (سامانه مودیان). It supports:
+Protocol-correct fiscal tax IDs, RSA signatures, encrypted INVOICE.V01 packets, asynchronous confirmation inquiries, HPOS-compatible order metadata, retry controls, and sandbox/production settings.
 
-* Environment switching between Sandbox and Production
-* PEM-formatted private key authentication
-* Auto-token retrieval and invoice transmission
-* Basic configuration through WordPress settings
+Every product requires a valid Moadian goods/service ID and measurement-unit code. See README.md and docs/PROTOCOL-COVERAGE.md before use.
+
+Important: tax APIs and invoice rules can change. Validate the currently mandated government SDK/version and complete sandbox acceptance testing before production filing.
 
 == Installation ==
 
-1. Upload the plugin file to the `/wp-content/plugins/` directory.
-2. Activate the plugin through the 'Plugins' menu in WordPress.
-3. Go to Settings > Moadian Settings to configure your keys and environment.
-4. Ensure WooCommerce is installed and active.
-
-== Frequently Asked Questions ==
-
-= Does this plugin support Sandbox mode? =
-Yes, you can switch between sandbox and production environments in the settings.
-
-= Is the plugin compatible with latest WooCommerce and WordPress versions? =
-Yes. It is actively maintained to stay compatible.
+1. Upload the plugin directory to `/wp-content/plugins/` and activate it.
+2. Open Settings > Moadian Settings.
+3. Configure the fiscal memory ID, economic code, private key, environment, and invoice defaults.
+4. Add `_moadian_service_id` and `_moadian_measurement_unit` metadata to products.
+5. Use Test connection, then submit representative orders in the government sandbox.
 
 == Changelog ==
 
-= 1.0.0 =
-* Initial release with authentication and invoice transmission.
+= 2.0.0 =
+* Replaced placeholder endpoints/payloads with the documented self-TSP protocol.
+* Added packet normalization, signatures, encryption, token expiry, fiscal tax IDs, and final-status inquiries.
+* Added queued submission, idempotent retry metadata, HPOS order access, authenticated secret storage, and capability checks.
 
-== Upgrade Notice ==
-
 = 1.0.0 =
-First stable version.
+* Initial release.

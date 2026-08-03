@@ -1,165 +1,81 @@
 # WooCommerce Moadian Connector
 
-**[English](#english) | [فارسی](#فارسی)**
+WordPress/WooCommerce integration for the Iranian Tax Organization's no-certificate self-TSP protocol described in the supplied .NET SDK guide.
 
-## English
+## What it does
 
-### Overview
-The **WooCommerce Moadian Connector** is a WordPress plugin that seamlessly integrates WooCommerce with the Iranian Tax System (Samaneh Moadian). It automates the process of generating and submitting invoices to the Moadian system for tax compliance, making it easier for businesses in Iran to manage their tax obligations.
+- Queues a fiscal invoice when a WooCommerce order becomes `completed`.
+- Builds the documented `INVOICE.V01` header/body structure from order-time values.
+- Generates the fiscal tax ID and invoice serial required by Moadian.
+- Signs requests with RSA-SHA256 and encrypts invoice packets with RSA-OAEP-256 plus AES-256-GCM.
+- Retrieves and caches access tokens using `GET_TOKEN`.
+- Retrieves the Tax Organization encryption key with `GET_SERVER_INFORMATION` when it is not configured manually.
+- Stores the returned UID/reference number, then polls `INQUIRY_BY_REFERENCE_NUMBER` until Moadian confirms or rejects the invoice.
+- Uses WooCommerce CRUD APIs, including HPOS-compatible order metadata access.
+- Encrypts the private key at rest with authenticated AES-256-GCM.
 
-### Features
-- **Automatic Invoice Submission**: Sends invoices to the Moadian system when WooCommerce orders are marked as completed.
-- **Retry Failed Invoices**: Allows manual retry for invoices that failed to submit.
-- **Secure Private Key Storage**: Encrypts and stores the Moadian private key (PEM format) securely.
-- **Sandbox and Production Modes**: Supports both sandbox and production environments for testing and live use.
-- **Admin Interface**: Provides a settings page under **Settings > Moadian Settings** and an invoices list under **WooCommerce > Moadian Invoices**.
-- **Customizable Invoice Types**: Supports different invoice types (e.g., Standard and Simplified).
-- **Debugging Support**: Logs errors to `debug.log` when `WP_DEBUG` is enabled for troubleshooting.
+See [Protocol coverage](docs/PROTOCOL-COVERAGE.md) for the feature-by-feature comparison and known gaps.
 
-### Requirements
-- WordPress 5.0 or higher
-- WooCommerce 8.0 or higher (tested up to 9.6.0)
-- PHP 7.2 or higher
-- OpenSSL PHP extension for encryption
-- A valid Moadian private key (PEM format) and economic code
+## Requirements
 
-### Installation
-1. **Download the Plugin**:
-   - Clone this repository or download the ZIP file from GitHub.
-   - Alternatively, install it directly from the WordPress Plugin Directory (if published).
+- WordPress 5.6+
+- WooCommerce 8.0+
+- PHP 7.4+
+- PHP OpenSSL extension
+- Action Scheduler (bundled with WooCommerce) or working WP-Cron
 
-2. **Upload to WordPress**:
-   - Navigate to **Plugins > Add New > Upload Plugin** in your WordPress admin panel.
-   - Upload the ZIP file and click **Install Now**.
+## Configuration
 
-3. **Activate the Plugin**:
-   - After installation, click **Activate** to enable the plugin.
+Open **Settings → Moadian Settings** and configure:
 
-4. **Configure Settings**:
-   - Go to **Settings > Moadian Settings** in the WordPress admin panel.
-   - Enter your Moadian private key, economic code, and select the environment (Sandbox or Production).
-   - Save the settings.
+1. Sandbox or production environment.
+2. Six-character fiscal memory ID (the client ID assigned after registering the public key).
+3. Seller economic code.
+4. The matching PEM private key.
+5. Optionally, the Tax Organization public key and key ID. If omitted, the plugin retrieves them from `GET_SERVER_INFORMATION`.
+6. Invoice type, amount multiplier, fallback goods/service ID, and measurement-unit code.
 
-### Usage
-1. **Configure the Plugin**:
-   - Access **Settings > Moadian Settings** to set up the environment, private key, economic code, and default invoice type.
-2. **Automatic Invoice Submission**:
-   - When an order is marked as **Completed** in WooCommerce, the plugin automatically generates and submits an invoice to the Moadian system.
-3. **View and Manage Invoices**:
-   - Go to **WooCommerce > Moadian Invoices** to view the list of submitted invoices, their statuses, and any error messages.
-   - Use the **Retry** button to resubmit failed or pending invoices.
-4. **Monitor Errors**:
-   - Enable `WP_DEBUG` in `wp-config.php` to log errors to `wp-content/debug.log` for troubleshooting.
+Use an amount multiplier of `10` only when WooCommerce prices are stored in tomans and the invoice must be sent in rials. Keep it at `1` when prices are already stored in rials.
 
-### Troubleshooting
-- **Moadian Invoices Menu Not Visible**:
-  - Ensure you have WooCommerce 8.0 or higher installed and activated.
-  - Check for plugin conflicts by deactivating other plugins (especially ACF or WooCommerce-related plugins).
-  - Switch to a default theme (e.g., Twenty Twenty-Three) to rule out theme issues.
-  - Verify that the user has the `manage_options` capability.
-  - Check `wp-content/debug.log` for errors prefixed with `[WC Moadian]`.
-- **Authentication or Submission Errors**:
-  - Verify that the private key and economic code are correct and properly formatted.
-  - Ensure the server has internet access to connect to the Moadian API (`https://tp.tax.gov.ir` or sandbox).
-  - Check the error messages in the **Moadian Invoices** page or `debug.log`.
-- **General Issues**:
-  - Clear browser and server caches (if using a caching plugin).
-  - Test with a clean WordPress installation to isolate environmental issues.
+### Product mapping
 
-### Contributing
-Contributions are welcome! To contribute:
-1. Fork this repository.
-2. Create a new branch for your feature or bug fix (`git checkout -b feature/your-feature`).
-3. Commit your changes (`git commit -m 'Add your feature'`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Open a pull request with a detailed description of your changes.
+Every product or variation should have these custom-meta values:
 
-Please ensure your code follows WordPress coding standards and includes appropriate documentation.
+- `_moadian_service_id`: valid 13-digit goods/service ID.
+- `_moadian_measurement_unit`: Moadian measurement-unit code.
 
-### License
-This plugin is licensed under the [GPLv2 or later](https://www.gnu.org/licenses/gpl-2.0.html).
+Variation values fall back to the parent product. Shipping and fee order items can also carry those metadata values; otherwise the plugin uses the configured fallbacks. Submission fails explicitly when required mapping is missing—no placeholder tax data is sent.
 
-### Support
-For support, please open an issue on the [GitHub repository](https://github.com/your-repo/woocommerce-moadian-connector) or contact the author at [ildrm.com](https://ildrm.com).
+Type-1 invoices additionally read buyer identity from `_billing_national_id` and `_billing_economic_code` by default. Both meta-key names are configurable.
 
----
+## Invoice lifecycle
 
-## فارسی
+`queued` → `sending` → `pending` → `success` or `failed`
 
-### معرفی
-افزونه **WooCommerce Moadian Connector** یک پلاگین وردپرسی است که ووکامرس را با سامانه مودیان مالیاتی ایران ادغام می‌کند. این افزونه فرآیند تولید و ارسال فاکتورها به سامانه مودیان را برای رعایت الزامات مالیاتی خودکار می‌کند و به کسب‌وکارهای ایرانی کمک می‌کند تا تعهدات مالیاتی خود را به‌راحتی مدیریت کنند.
+An accepted async submission is deliberately recorded as `pending`, not `success`. The plugin schedules an inquiry and only marks the order successful after Moadian returns `SUCCESS`. From **WooCommerce → Moadian Invoices**, retry failed submissions or manually check pending references.
 
-### ویژگی‌ها
-- **ارسال خودکار فاکتور**: هنگام تکمیل سفارش‌ها در ووکامرس، فاکتورها به‌صورت خودکار به سامانه مودیان ارسال می‌شوند.
-- **تلاش مجدد برای فاکتورهای ناموفق**: امکان ارسال مجدد دستی فاکتورهای ناموفق یا در انتظار.
-- **ذخیره امن کلید خصوصی**: کلید خصوصی مودیان (فرمت PEM) را به‌صورت رمزنگاری‌شده ذخیره می‌کند.
-- **حالت‌های آزمایشی و تولیدی**: پشتیبانی از محیط‌های سندباکس و تولیدی برای تست و استفاده واقعی.
-- **رابط کاربری مدیریت**: صفحه تنظیمات در **تنظیمات > تنظیمات مودیان** و لیست فاکتورها در **ووکامرس > فاکتورهای مودیان**.
-- **انواع فاکتور قابل تنظیم**: پشتیبانی از انواع مختلف فاکتور (مانند استاندارد و ساده‌شده).
-- **پشتیبانی از دیباگ**: ثبت خطاها در `debug.log` هنگام فعال بودن `WP_DEBUG` برای عیب‌یابی.
+## Extension hooks
 
-### پیش‌نیازها
-- وردپرس نسخه 5.0 یا بالاتر
-- ووکامرس نسخه 8.0 یا بالاتر (تست‌شده تا نسخه 9.6.0)
-- PHP نسخه 7.2 یا بالاتر
-- افزونه OpenSSL در PHP برای رمزنگاری
-- کلید خصوصی معتبر مودیان (فرمت PEM) و کد اقتصادی
+- `wc_moadian_invoice_data`: modify the final documented invoice array.
+- `wc_moadian_invoice_serial`: supply a unique, at-most-12-digit serial before the first send (defaults to order ID and is then persisted).
+- `wc_moadian_line_vat_rate`: override a line's derived VAT rate.
+- `wc_moadian_allow_multiple_taxes`: opt into custom multi-tax mapping; by default such lines fail explicitly.
+- `wc_moadian_api_base_url`: override the selected sandbox/production base URL.
 
-### نصب
-1. **دانلود افزونه**:
-   - این مخزن را کلون کنید یا فایل ZIP را از GitHub دانلود کنید.
-   - در صورت انتشار، می‌توانید آن را مستقیماً از مخزن افزونه‌های وردپرس نصب کنید.
+## Tests
 
-2. **آپلود به وردپرس**:
-   - در پنل مدیریت وردپرس به **افزونه‌ها > افزودن > بارگذاری افزونه** بروید.
-   - فایل ZIP را آپلود کرده و روی **نصب** کلیک کنید.
+Run the dependency-free protocol checks with:
 
-3. **فعال‌سازی افزونه**:
-   - پس از نصب، روی **فعال‌سازی** کلیک کنید.
+```bash
+php tests/run.php
+```
 
-4. **پیکربندی تنظیمات**:
-   - به **تنظیمات > تنظیمات مودیان** در پنل مدیریت وردپرس بروید.
-   - کلید خصوصی مودیان، کد اقتصادی و محیط (سندباکس یا تولیدی) را وارد کنید.
-   - تنظیمات را ذخیره کنید.
+The suite checks official/community SDK vectors for normalization and tax-ID generation, verifies request and data signatures, and—when the temporary reference SDK is available—cross-decrypts the RSA-OAEP/AES-GCM payload.
 
-### استفاده
-1. **پیکربندی افزونه**:
-   - به **تنظیمات > تنظیمات مودیان** بروید و محیط، کلید خصوصی، کد اقتصادی و نوع فاکتور پیش‌فرض را تنظیم کنید.
-2. **ارسال خودکار فاکتور**:
-   - هنگامی که یک سفارش در ووکامرس به وضعیت **تکمیل‌شده** تغییر کند، افزونه به‌صورت خودکار فاکتور را به سامانه مودیان ارسال می‌کند.
-3. **مشاهده و مدیریت فاکتورها**:
-   - به **ووکامرس > فاکتورهای مودیان** بروید تا لیست فاکتورهای ارسالی، وضعیت‌ها و پیام‌های خطا را مشاهده کنید.
-   - از دکمه **تلاش مجدد** برای ارسال مجدد فاکتورهای ناموفق یا در انتظار استفاده کنید.
-4. **نظارت بر خطاها**:
-   - با فعال کردن `WP_DEBUG` در فایل `wp-config.php`، خطاها در `wp-content/debug.log` ثبت می‌شوند.
+## Important scope note
 
-### عیب‌یابی
-- **منوی فاکتورهای مودیان نمایش داده نمی‌شود**:
-  - مطمئن شوید ووکامرس نسخه 8.0 یا بالاتر نصب و فعال است.
-  - با غیرفعال کردن سایر افزونه‌ها (به‌ویژه ACF یا افزونه‌های مرتبط با ووکامرس) تداخل‌ها را بررسی کنید.
-  - به یک پوسته پیش‌فرض (مانند Twenty Twenty-Three) تغییر دهید.
-  - بررسی کنید که کاربر دارای قابلیت `manage_options` باشد.
-  - فایل `wp-content/debug.log` را برای خطاهای `[WC Moadian]` بررسی کنید.
-- **خطاهای احراز هویت یا ارسال**:
-  - مطمئن شوید کلید خصوصی و کد اقتصادی صحیح و با فرمت مناسب وارد شده‌اند.
-  - بررسی کنید که سرور به API مودیان (`https://tp.tax.gov.ir` یا سندباکس) دسترسی دارد.
-  - پیام‌های خطا را در صفحه **فاکتورهای مودیان** یا `debug.log` بررسی کنید.
-- **مشکلات عمومی**:
-  - کش مرورگر و سرور (در صورت استفاده از افزونه کش) را پاک کنید.
-  - با یک نصب تمیز وردپرس تست کنید تا مشکلات محیطی شناسایی شوند.
+This code implements the protocol in the document supplied for this review. The original government URL currently returns HTTP 404, and later SDK revisions have been announced. Confirm the currently mandated SDK/version and invoice rules with the Iranian Tax Organization before production filing. This software is not tax or legal advice.
 
-### مشارکت
-از مشارکت شما استقبال می‌کنیم! برای مشارکت:
-1. این مخزن را فورک کنید.
-2. یک شاخه جدید برای ویژگی یا رفع اشکال ایجاد کنید (`git checkout -b feature/your-feature`).
-3. تغییرات خود را کامیت کنید (`git commit -m 'Add your feature'`).
-4. شاخه را به مخزن خود push کنید (`git push origin feature/your-feature`).
-5. یک درخواست کشش (Pull Request) با توضیحات کامل تغییرات باز کنید.
+## License
 
-لطفاً مطمئن شوید کد شما از استانداردهای کدنویسی وردپرس پیروی می‌کند و مستندات مناسب دارد.
-
-### لایسنس
-این افزونه تحت [لایسنس GPLv2 یا بالاتر](https://www.gnu.org/licenses/gpl-2.0.html) منتشر شده است.
-
-### پشتیبانی
-برای پشتیبانی، لطفاً یک مسئله (Issue) در [مخزن GitHub](https://github.com/your-repo/woocommerce-moadian-connector) باز کنید یا با نویسنده در [ildrm.com](https://ildrm.com) تماس بگیرید.
+GPL-2.0-or-later. Protocol-algorithm attribution is recorded in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
