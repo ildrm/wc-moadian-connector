@@ -78,4 +78,4 @@ This code implements the protocol in the document supplied for this review. The 
 
 ## License
 
-GPL-2.0-or-later. Protocol-algorithm attribution is recorded in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+MIT
