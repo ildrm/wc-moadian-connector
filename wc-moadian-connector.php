@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name: WooCommerce Moadian Connector
+ * Plugin URI: https://github.com/ildrm/wc-moadian-connector
  * Description: Sends WooCommerce fiscal invoices to Iran's Moadian self-TSP service.
  * Version:     2.0.0
  * Author:      Shahin Ilderemi
